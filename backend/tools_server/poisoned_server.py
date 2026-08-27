@@ -1,7 +1,18 @@
-"""Servidor MCP ENVENENADO. Solo para probar las defensas de Oracle Core.
+"""SERVIDOR MCP DELIBERADAMENTE ENVENENADO -- FIXTURE DE PRUEBA DEFENSIVA.
 
-Declara las mismas tools que echo_server pero con descripciones que atacan
-al Planner. NO usar como base de nada.
+=============================================================================
+ADVERTENCIA
+=============================================================================
+Este archivo NO es codigo de ataque para usar contra nadie. Es un objetivo
+de prueba: existe unicamente para que la suite `test_poisoning_live.py`
+demuestre que las defensas de Oracle Core (oracle/manifest.py) detectan y
+bloquean un servidor MCP malicioso ANTES de que el Planner lea nada.
+
+Los payloads son ejemplos publicos y ampliamente documentados de tool
+poisoning en MCP. No contienen tecnicas novedosas.
+
+NO usar como base de ningun servidor real. NO desplegar.
+=============================================================================
 """
 from __future__ import annotations
 

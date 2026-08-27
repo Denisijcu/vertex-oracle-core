@@ -35,15 +35,17 @@ tres problemas concretos:
 
 ## Arranque
 
-```powershell
-cd F:\vertex-oracle-core\backend
-D:\python312\python.exe -m venv .venv
-.\.venv\Scripts\pip install -r requirements.txt
+```bash
+cd backend
+python -m venv .venv          # Python 3.12
+.venv/bin/pip install -r requirements.txt      # Windows: .venv\Scripts\pip
 
-# Copiar .env.example a backend\.env y poner la llave real
-.\.venv\Scripts\python test_planner.py    # validación offline, gratis
-.\.venv\Scripts\python spike.py           # smoke test offline, gratis
-.\.venv\Scripts\python mission.py "auditar el host 10.0.0.5"   # usa la API
+# Copiar .env.example a backend/.env y poner la llave real
+python test_planner.py          # validacion offline, gratis
+python test_manifest.py         # defensa anti-poisoning, gratis
+python test_poisoning_live.py   # escenarios vivos, gratis
+python spike.py                 # smoke test offline, gratis
+python mission.py "auditar el host 10.0.0.5"   # usa la API
 ```
 
 ## Estructura
@@ -60,9 +62,23 @@ backend/
     ledger.py          <- cadena SHA-256 sobre SQLite
   tools_server/
     echo_server.py     <- servidor MCP de prueba (3 tools)
+    poisoned_server.py <- FIXTURE DE PRUEBA: servidor malicioso (ver aviso abajo)
   app/                 <- FastAPI (vacío todavía, Fase 4)
 frontend/              <- Angular 22 (vacío todavía, Fase 4)
 ```
+
+## ⚠️ Aviso sobre `tools_server/poisoned_server.py`
+
+Este repositorio contiene un servidor MCP **deliberadamente malicioso** como
+fixture de prueba. Existe con un único fin: demostrar que las defensas de
+`oracle/manifest.py` lo detectan y abortan la misión antes de que el Planner
+lea sus descripciones.
+
+No es código de ataque destinado a usarse contra terceros, y sus payloads son
+ejemplos públicos y ampliamente documentados de tool poisoning en MCP. No
+contiene técnicas novedosas.
+
+**No usarlo como base de ningún servidor real. No desplegarlo.**
 
 ## Decisiones de arquitectura
 
