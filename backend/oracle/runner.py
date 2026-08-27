@@ -24,6 +24,7 @@ from mcp import Client, StdioServerParameters
 from .ledger import Ledger
 from .manifest import ToolPinStore
 from .plan import Plan, PlanError
+from .sentinel import APPROVE, ESCALATE, Sentinel
 
 MAX_ATTEMPTS = 3        # reintentos por paso
 
@@ -35,7 +36,8 @@ class StepState:
     rationale: str
     result: Any = None
     attempts: int = 0
-    status: str = "pending"         # pending | ok | failed
+    status: str = "pending"         # pending | ok | failed | escalated | rejected
+    verdict: str = ""
 
 
 @dataclass
@@ -58,12 +60,14 @@ class MissionRunner:
         planner,
         server_id: str = "default",
         pins: ToolPinStore | None = None,
+        sentinel: Sentinel | None = None,
     ) -> None:
         self._server = server
         self._ledger = ledger
         self._planner = planner
         self._server_id = server_id
         self._pins = pins or ToolPinStore()
+        self._sentinel = sentinel or Sentinel()
 
     async def run(self, objective: str) -> MissionState:
         mission_id = uuid.uuid4().hex[:12]
@@ -124,14 +128,16 @@ class MissionRunner:
                     step.status = "failed"
                     break
 
-                await self._run_step(client, mission_id, idx, step)
-                if step.status == "failed":
+                await self._run_step(client, mission_id, idx, step, objective)
+                if step.status != "ok":
                     break
 
         self._ledger.append(mission_id, "mission.end", {"success": state.success})
         return state
 
-    async def _run_step(self, client: Client, mission_id: str, idx: int, step: StepState) -> None:
+    async def _run_step(
+        self, client: Client, mission_id: str, idx: int, step: StepState, objective: str
+    ) -> None:
         while step.attempts < MAX_ATTEMPTS:
             step.attempts += 1
             self._ledger.append(
@@ -143,7 +149,37 @@ class MissionRunner:
                 res = await client.call_tool(step.tool, step.args)
                 if getattr(res, "is_error", False):
                     raise RuntimeError(_text_of(res))
-                step.result = _text_of(res)
+                salida = _text_of(res)
+
+                # --- Sentinel: audita ANTES de aceptar el resultado. ---
+                audit = await self._sentinel.review(objective, step.tool, step.args, salida)
+                step.verdict = audit.verdict
+                self._ledger.append(
+                    mission_id,
+                    "sentinel.verdict",
+                    {
+                        "step": idx,
+                        "verdict": audit.verdict,
+                        "rationale": audit.rationale[:300],
+                        "model": audit.model,
+                        "solo_determinista": audit.deterministic_only,
+                        "hallazgos": [f.__dict__ for f in audit.findings],
+                    },
+                )
+
+                if audit.verdict != APPROVE:
+                    # Un resultado no aprobado NO se sella como checkpoint ni se
+                    # reintenta: reintentar una inyeccion solo la repite.
+                    step.result = None
+                    step.status = "escalated" if audit.verdict == ESCALATE else "rejected"
+                    self._ledger.append(
+                        mission_id,
+                        "mission.halted",
+                        {"step": idx, "motivo": audit.verdict, "detalle": audit.summary()[:400]},
+                    )
+                    return
+
+                step.result = salida
                 step.status = "ok"
                 self._ledger.append(
                     mission_id, "step.checkpoint", {"step": idx, "result": step.result}
