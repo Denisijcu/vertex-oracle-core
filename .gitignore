@@ -1,0 +1,43 @@
+# --- Secretos: NUNCA commitear ---
+# Se cubren variantes con typo (,env / .env2 / env) a proposito:
+# un archivo de secretos mal nombrado no queda desprotegido.
+.env
+.env.*
+!.env.example
+,env
+,env.*
+env.local
+*.env
+*.key
+*.pem
+*credentials*
+*secret*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Ledger y bases de datos locales ---
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# --- Angular / Node (frontend) ---
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+
+# --- Editores / SO ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
