@@ -19,9 +19,12 @@ from app.main import _factory, app
 def _http() -> list[tuple[str, bool]]:
     c = TestClient(app)
     r = c.get("/")
+    js = c.get("/static/panel.js")
     return [
         ("el panel se sirve en la raiz", r.status_code == 200 and "Oracle Core" in r.text),
-        ("el panel trae la consola de operador", "ws/operator" in r.text),
+        ("el panel carga su script", "/static/panel.js" in r.text),
+        ("el script se sirve", js.status_code == 200),
+        ("el script abre el WebSocket de operador", "ws/operator" in js.text),
         ("la API lista misiones", "missions" in c.get("/api/missions").json()),
         ("decidir sobre una mision inexistente da 404",
          c.post("/api/decisions",
