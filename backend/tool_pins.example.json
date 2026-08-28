@@ -1,0 +1,15 @@
+{
+  "_comentario": [
+    "Ejemplo de tool_pins.json. NO copies este archivo a tool_pins.json.",
+    "El archivo real se genera solo la primera vez que Oracle Core se conecta",
+    "a un servidor MCP: toma la huella SHA-256 de cada tool (nombre +",
+    "descripcion + esquema de entrada) y la fija.",
+    "",
+    "Nunca versiones tu tool_pins.json ni uses el de otra persona: heredar",
+    "aprobaciones ajenas anula el proposito del fijado. Cada operador aprueba",
+    "sus propios servidores."
+  ],
+  "nombre-del-servidor-mcp": {
+    "nombre_de_la_tool": "sha256 del contrato de esa tool (64 hex)"
+  }
+}
