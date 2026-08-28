@@ -1,6 +1,46 @@
 // Consola de operador de Vertex Oracle Core.
-// Se conecta por WebSocket, pinta la cadena de custodia en vivo y presenta
-// las intervenciones que el Sentinel escala.
+// El token de acceso vive SOLO en esta variable: nunca en localStorage, que
+// cualquier XSS podria leer. El de refresco viaja en cookie HttpOnly y el
+// JavaScript no lo ve nunca.
+
+let acceso = null;
+let usuario = null;
+let renovar = null;
+
+async function api(ruta, opciones = {}, reintentar = true){
+  const cab = { ...(opciones.headers || {}) };
+  if (acceso) cab.Authorization = `Bearer ${acceso}`;
+  if (opciones.body) cab["Content-Type"] = "application/json";
+  const r = await fetch(ruta, { ...opciones, headers: cab });
+  if (r.status === 401 && reintentar && await refrescar()){
+    return api(ruta, opciones, false);
+  }
+  return r;
+}
+
+async function refrescar(){
+  const r = await fetch("/api/auth/refresh", { method: "POST" });
+  if (!r.ok){ cerrarSesion(); return false; }
+  const d = await r.json();
+  acceso = d.access_token; usuario = d.user;
+  programarRenovacion(d.expires_in);
+  return true;
+}
+
+function programarRenovacion(segundos){
+  clearTimeout(renovar);
+  // Se renueva un minuto antes de caducar, para no cortar nada a media accion.
+  renovar = setTimeout(refrescar, Math.max(10, segundos - 60) * 1000);
+}
+
+function cerrarSesion(){
+  acceso = null; usuario = null;
+  clearTimeout(renovar);
+  M.clear(); selected = null;
+  $("app").hidden = true;
+  $("entrar").hidden = false;
+  $("clave").value = "";
+}
 
 const M = new Map();
 let selected = null, pending = null;
@@ -118,18 +158,19 @@ async function responder(action){
                  reason: $("why").value.trim() };
   $("veil").hidden = true;
   pending = null;
-  await fetch("/api/decisions", {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  await api("/api/decisions", {method:"POST", body: JSON.stringify(body)});
 }
 
 function conectar(){
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/operator`);
+  const ws = new WebSocket(
+    `${proto}://${location.host}/ws/operator?token=${encodeURIComponent(acceso)}`);
   ws.onopen = () => { $("dot").classList.add("on"); $("linkTxt").textContent = "en línea"; };
-  ws.onclose = () => {
+  ws.onclose = ev => {
     $("dot").classList.remove("on");
+    if (ev.code === 4401){ cerrarSesion(); return; }
     $("linkTxt").textContent = "sin conexión · reintentando";
-    setTimeout(conectar, 1800);
+    if (acceso) setTimeout(conectar, 1800);
   };
   ws.onmessage = ev => {
     const { kind, data } = JSON.parse(ev.data);
@@ -164,8 +205,7 @@ function conectar(){
 
 async function lanzar(demo){
   const objective = $("obj").value.trim() || "Audita el host 10.0.0.5";
-  const r = await fetch("/api/missions", {method:"POST",
-    headers:{"Content-Type":"application/json"},
+  const r = await api("/api/missions", {method:"POST",
     body: JSON.stringify({objective, demo})});
   if (!r.ok) alert((await r.json()).detail || "No se pudo lanzar la misión");
 }
@@ -173,4 +213,39 @@ $("demo").onclick = () => lanzar(true);
 $("real").onclick = () => lanzar(false);
 $("obj").onkeydown = e => { if (e.key === "Enter") lanzar(true); };
 
-pintarLista(); pintarDetalle(); conectar();
+// ------------------------------------------------------------ sesión
+
+async function entrar(){
+  $("errLogin").textContent = "";
+  const r = await fetch("/api/auth/login", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ username: $("usuario").value.trim(),
+                           password: $("clave").value })});
+  if (!r.ok){
+    $("errLogin").textContent = (await r.json()).detail || "No se pudo entrar";
+    $("clave").value = "";
+    return;
+  }
+  const d = await r.json();
+  acceso = d.access_token; usuario = d.user;
+  programarRenovacion(d.expires_in);
+  abrirConsola();
+}
+
+function abrirConsola(){
+  $("entrar").hidden = true;
+  $("app").hidden = false;
+  $("quien").textContent = usuario;
+  pintarLista(); pintarDetalle(); conectar();
+}
+
+$("btnEntrar").onclick = entrar;
+$("clave").onkeydown = e => { if (e.key === "Enter") entrar(); };
+$("usuario").onkeydown = e => { if (e.key === "Enter") $("clave").focus(); };
+$("salir").onclick = async () => {
+  await api("/api/auth/logout", {method:"POST"}, false);
+  cerrarSesion();
+};
+
+// Si queda una cookie de refresco viva, se entra sin pedir credenciales.
+refrescar().then(ok => { if (ok) abrirConsola(); else $("usuario").focus(); });

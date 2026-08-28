@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="t d">
+<title id="t">Una cadena de hashes prueba consistencia, no autoría</title>
+<desc id="d">Portada del artículo sobre Vertex Oracle Core: una cadena de eslabones sellados en la que uno se rompe y la línea se vuelve discontinua.</desc>
+
+<defs>
+  <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#12161F"/>
+    <stop offset="1" stop-color="#0B0E14"/>
+  </linearGradient>
+  <linearGradient id="desvanece" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#5B8DEF" stop-opacity="0"/>
+    <stop offset="0.12" stop-color="#5B8DEF" stop-opacity="1"/>
+  </linearGradient>
+</defs>
+
+<rect width="1200" height="630" fill="url(#fondo)"/>
+
+<!-- Rejilla tenue: papel cuadriculado de acta, no pantalla de terminal -->
+<g stroke="#1C2430" stroke-width="1" opacity="0.55">
+  <path d="M0 90H1200M0 210H1200M0 330H1200M0 450H1200M0 570H1200"/>
+  <path d="M150 0V630M400 0V630M650 0V630M900 0V630M1150 0V630"/>
+</g>
+
+<!-- Filete superior: azul de sello que se corta en rojo -->
+<rect x="0" y="0" width="820" height="3" fill="#5B8DEF"/>
+<rect x="820" y="0" width="380" height="3" fill="#D4544A"/>
+
+<text x="90" y="112" font-family="ui-monospace, 'SF Mono', Consolas, monospace"
+      font-size="15" letter-spacing="4.5" fill="#7C879B">VERTEX ORACLE CORE</text>
+
+<text font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+      font-size="54" font-weight="700" fill="#E9E4D8" letter-spacing="-1">
+  <tspan x="90" y="215">Una cadena de hashes</tspan>
+  <tspan x="90" y="278">prueba consistencia.</tspan>
+</text>
+
+<text font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+      font-size="54" font-weight="700" fill="#D4544A" letter-spacing="-1">
+  <tspan x="90" y="341">No prueba autoría.</tspan>
+</text>
+
+<text x="90" y="393" font-family="Georgia, serif" font-size="21" fill="#8A93A6">
+  Construir un orquestador de agentes de IA, y lo que salió mal.
+</text>
+
+<!-- La cadena. Eslabones sellados en azul; el sexto, roto. -->
+<g>
+  <!-- tramo íntegro -->
+  <line x1="90" y1="500" x2="740" y2="500" stroke="url(#desvanece)" stroke-width="2"/>
+  <!-- tramo roto -->
+  <line x1="740" y1="500" x2="1110" y2="500" stroke="#D4544A" stroke-width="2"
+        stroke-dasharray="7 9" opacity="0.85"/>
+
+  <g fill="#5B8DEF">
+    <rect x="83" y="493" width="14" height="14" rx="2" transform="rotate(45 90 500)"/>
+    <rect x="213" y="493" width="14" height="14" rx="2" transform="rotate(45 220 500)"/>
+    <rect x="343" y="493" width="14" height="14" rx="2" transform="rotate(45 350 500)"/>
+    <rect x="473" y="493" width="14" height="14" rx="2" transform="rotate(45 480 500)"/>
+    <rect x="603" y="493" width="14" height="14" rx="2" transform="rotate(45 610 500)"/>
+  </g>
+
+  <!-- el eslabón que se rompió -->
+  <g>
+    <circle cx="740" cy="500" r="26" fill="#D4544A" opacity="0.12"/>
+    <rect x="733" y="493" width="14" height="14" rx="2" fill="#D4544A"
+          transform="rotate(45 740 500)"/>
+  </g>
+
+  <g fill="#3A4354">
+    <rect x="863" y="493" width="14" height="14" rx="2" transform="rotate(45 870 500)"/>
+    <rect x="993" y="493" width="14" height="14" rx="2" transform="rotate(45 1000 500)"/>
+    <rect x="1103" y="493" width="14" height="14" rx="2" transform="rotate(45 1110 500)"/>
+  </g>
+</g>
+
+<!-- Los digests bajo la cadena: lo que se sella y lo que se pierde -->
+<g font-family="ui-monospace, 'SF Mono', Consolas, monospace" font-size="12.5"
+   fill="#4E586B" text-anchor="middle">
+  <text x="90"  y="537">49b1f9…</text>
+  <text x="220" y="537">a42494…</text>
+  <text x="350" y="537">504d90…</text>
+  <text x="480" y="537">00429b…</text>
+  <text x="610" y="537">eab723…</text>
+  <text x="740" y="537" fill="#D4544A">‹ausente›</text>
+  <text x="870" y="537">recalculado</text>
+  <text x="1000" y="537">recalculado</text>
+</g>
+
+<line x1="90" y1="575" x2="1110" y2="575" stroke="#1F2735" stroke-width="1"/>
+
+<g font-family="ui-monospace, 'SF Mono', Consolas, monospace" font-size="13.5">
+  <text x="90" y="601" fill="#5FB39A">cadena interna: íntegra</text>
+  <text x="330" y="601" fill="#D4544A">NO VERIFICADO</text>
+  <text x="1110" y="601" fill="#6B7689" text-anchor="end">github.com/Denisijcu/vertex-oracle-core</text>
+</g>
+
+</svg>

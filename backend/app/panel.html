@@ -113,6 +113,19 @@ section{background:var(--ground);overflow-y:auto;padding:22px 26px}
   .ask{animation:rise .22s ease-out}
   @keyframes rise{from{opacity:0;transform:translateY(10px)}}
 }
+
+/* --- Entrada --- */
+#entrar[hidden]{display:none}
+#entrar{flex:1;display:grid;place-items:center;padding:24px}
+.puerta{width:100%;max-width:370px}
+.puerta h2{font:700 21px/1.3 "Space Grotesk";margin:10px 0 6px}
+.puerta p{color:var(--muted);font-size:13.5px;margin:0 0 22px}
+.puerta label{display:block;margin-bottom:13px}
+.puerta span{display:block;margin-bottom:6px;font:500 11px/1 "IBM Plex Mono",monospace;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.puerta button{width:100%;margin-top:7px;border-color:var(--seal);color:var(--seal)}
+.err{color:var(--break);font-size:13px;margin-top:13px;min-height:1.2em}
+#quien{font:500 12px/1 "IBM Plex Mono",monospace;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -122,10 +135,27 @@ section{background:var(--ground);overflow-y:auto;padding:22px 26px}
   <div class="link">
     <span class="dot" id="dot"></span>
     <span class="eyebrow" id="linkTxt">conectando</span>
+    <span id="quien"></span>
+    <button id="salir" style="padding:5px 11px;font-size:13px">Salir</button>
   </div>
 </header>
 
-<main>
+<div id="entrar">
+  <div class="puerta">
+    <p class="eyebrow">Acceso de operador</p>
+    <h2>Entra a la consola</h2>
+    <p>Solo el operador autorizado puede lanzar misiones y aprobar
+      intervenciones. Cada decisión queda sellada con tu nombre.</p>
+    <label><span>Usuario</span>
+      <input id="usuario" autocomplete="username"></label>
+    <label><span>Clave</span>
+      <input id="clave" type="password" autocomplete="current-password"></label>
+    <button id="btnEntrar">Entrar</button>
+    <p class="err" id="errLogin"></p>
+  </div>
+</div>
+
+<main id="app" hidden>
   <section>
     <p class="eyebrow">Nueva misión</p>
     <div class="launch">

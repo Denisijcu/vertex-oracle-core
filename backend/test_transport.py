@@ -1,4 +1,5 @@
-"""Pruebas del transporte HITL: API HTTP, difusion en vivo y fallo cerrado.
+"""Pruebas del transporte HITL: API HTTP autenticada, difusion en vivo y
+politica de fallo cerrado.
 
 Sin red externa y sin API de Anthropic: usa el modo demo.
 
@@ -7,30 +8,53 @@ Correr con:  python test_transport.py
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 
-from fastapi.testclient import TestClient
+os.environ.setdefault("ORACLE_JWT_SECRET", "t" * 48)
+os.environ.setdefault("ORACLE_OPERATOR", "denis")
+os.environ.setdefault("ORACLE_COOKIE_SECURE", "0")
 
-from app.hub import MissionHub
-from app.main import _factory, app
+from app.auth import hash_password  # noqa: E402
+
+os.environ.setdefault("ORACLE_OPERATOR_HASH", hash_password("clave-de-prueba"))
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.hub import MissionHub  # noqa: E402
+from app.main import _factory, app  # noqa: E402
 
 
 def _http() -> list[tuple[str, bool]]:
     c = TestClient(app)
     r = c.get("/")
     js = c.get("/static/panel.js")
+
+    sin_token = c.get("/api/missions").status_code
+    login = c.post("/api/auth/login",
+                   json={"username": "denis", "password": "clave-de-prueba"})
+    auth = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
     return [
         ("el panel se sirve en la raiz", r.status_code == 200 and "Oracle Core" in r.text),
+        ("el panel trae la pantalla de entrada", "Acceso de operador" in r.text),
         ("el panel carga su script", "/static/panel.js" in r.text),
         ("el script se sirve", js.status_code == 200),
         ("el script abre el WebSocket de operador", "ws/operator" in js.text),
-        ("la API lista misiones", "missions" in c.get("/api/missions").json()),
+        ("el token de acceso no se guarda en el navegador",
+         not any(u in js.text for u in
+                 ("localStorage.", "sessionStorage.", "localStorage[", "sessionStorage["))),
+        ("sin token la API esta cerrada", sin_token == 401),
+        ("el login devuelve acceso", login.status_code == 200),
+        ("con token se listan misiones",
+         c.get("/api/missions", headers=auth).status_code == 200),
         ("decidir sobre una mision inexistente da 404",
-         c.post("/api/decisions",
+         c.post("/api/decisions", headers=auth,
                 json={"mission": "nada", "action": "approve"}).status_code == 404),
         ("un objetivo vacio se rechaza",
-         c.post("/api/missions", json={"objective": ""}).status_code == 422),
+         c.post("/api/missions", headers=auth,
+                json={"objective": ""}).status_code == 422),
     ]
 
 
