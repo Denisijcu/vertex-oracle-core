@@ -30,6 +30,12 @@ env/
 *.db-shm
 *.sqlite3
 
+# --- Aprobaciones locales del operador ---
+# NO se versionan: quien clone el repo debe aprobar SUS propios servidores MCP.
+# Heredar las huellas de otro anula el proposito del fijado criptografico.
+tool_pins.json
+!tool_pins.example.json
+
 # --- Angular / Node (frontend) ---
 node_modules/
 dist/

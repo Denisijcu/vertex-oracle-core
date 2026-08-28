@@ -57,6 +57,7 @@ class Finding:
     tool: str
     severity: str          # "block" | "warn"
     reason: str
+    kind: str = "injection"   # "injection" | "drift"
 
 
 @dataclass
@@ -66,6 +67,17 @@ class ScanResult:
     @property
     def blocked(self) -> bool:
         return any(f.severity == "block" for f in self.findings)
+
+    @property
+    def only_drift(self) -> bool:
+        """True si lo unico que bloquea es un cambio de huella, sin inyeccion.
+
+        Un servidor legitimo que se actualiza produce SOLO drift: el operador
+        puede re-aprobarlo. Un servidor con patrones de inyeccion en sus
+        descripciones NO es re-aprobable: eso es un bloqueo duro.
+        """
+        duros = [f for f in self.findings if f.severity == "block"]
+        return bool(duros) and all(f.kind == "drift" for f in duros)
 
     def summary(self) -> str:
         return "; ".join(f"[{f.severity}] {f.tool}: {f.reason}" for f in self.findings)
@@ -150,7 +162,8 @@ class ToolPinStore:
         for nombre, huella in actual.items():
             if nombre not in fijado:
                 result.findings.append(
-                    Finding(nombre, "block", "tool nueva no aprobada desde el ultimo fijado")
+                    Finding(nombre, "block", "tool nueva no aprobada desde el ultimo fijado",
+                            kind="drift")
                 )
             elif fijado[nombre] != huella:
                 result.findings.append(
@@ -159,11 +172,14 @@ class ToolPinStore:
                         "block",
                         f"RUG PULL: el contrato cambio tras ser aprobado "
                         f"({fijado[nombre][:12]}... -> {huella[:12]}...)",
+                        kind="drift",
                     )
                 )
         for nombre in fijado:
             if nombre not in actual:
-                result.findings.append(Finding(nombre, "warn", "tool aprobada que ya no se declara"))
+                result.findings.append(
+                    Finding(nombre, "warn", "tool aprobada que ya no se declara", kind="drift")
+                )
 
         return result
 

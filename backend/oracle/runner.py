@@ -1,4 +1,4 @@
-"""Runner de misiones: Planner -> plan bloqueado -> Worker -> Ledger.
+"""Runner de misiones: Planner -> plan bloqueado -> Worker -> Sentinel -> Ledger.
 
 NOTA DE ARQUITECTURA
 --------------------
@@ -12,6 +12,13 @@ ANTI-DRIFT
 El plan se BLOQUEA antes de ejecutar (plan-before-act). El Worker no lo
 renegocia: no puede agregar pasos ni cambiar la tool de un paso a mitad de
 camino. Cada paso reafirma el objetivo original antes de correr.
+
+PUERTAS, EN ORDEN
+-----------------
+1. Fijado de tools (manifest)  -> antes de planificar
+2. Validacion del plan (plan)  -> antes de ejecutar
+3. Auditoria del resultado (sentinel) -> antes de sellar el checkpoint
+4. Intervencion humana (hitl)  -> cuando 1 o 3 no pueden decidir solos
 """
 from __future__ import annotations
 
@@ -21,6 +28,18 @@ from typing import Any
 
 from mcp import Client, StdioServerParameters
 
+from .hitl import (
+    ABORT,
+    Approver,
+    Decision,
+    FailClosedApprover,
+    InterventionRequest,
+    OVERRIDE,
+    RETRY,
+    SENTINEL_ESCALATION,
+    TOOL_DRIFT,
+)
+from .hitl import APPROVE as HITL_APPROVE
 from .ledger import Ledger
 from .manifest import ToolPinStore
 from .plan import Plan, PlanError
@@ -61,6 +80,7 @@ class MissionRunner:
         server_id: str = "default",
         pins: ToolPinStore | None = None,
         sentinel: Sentinel | None = None,
+        approver: Approver | None = None,
     ) -> None:
         self._server = server
         self._ledger = ledger
@@ -68,6 +88,7 @@ class MissionRunner:
         self._server_id = server_id
         self._pins = pins or ToolPinStore()
         self._sentinel = sentinel or Sentinel()
+        self._approver = approver or FailClosedApprover()
 
     async def run(self, objective: str) -> MissionState:
         mission_id = uuid.uuid4().hex[:12]
@@ -87,15 +108,39 @@ class MissionRunner:
                     {"detalle": [f.__dict__ for f in scan.findings]},
                 )
             if scan.blocked:
-                self._ledger.append(
-                    mission_id,
-                    "mission.aborted",
-                    {"motivo": "tool poisoning", "detalle": scan.summary()},
-                )
-                self._ledger.append(mission_id, "mission.end", {"success": False})
-                st = MissionState(objective=objective, steps=[], mission_id=mission_id)
-                st.aborted_by = scan.summary()
-                return st
+                repinned = False
+                if scan.only_drift:
+                    # Cambio de huella SIN inyeccion: un servidor legitimo pudo
+                    # haberse actualizado. Lo decide un humano, no el sistema.
+                    dec = await self._ask(
+                        mission_id,
+                        InterventionRequest(
+                            mission_id=mission_id,
+                            kind=TOOL_DRIFT,
+                            summary="el contrato de una o mas tools cambio tras ser aprobado",
+                            context={"servidor": self._server_id, "detalle": scan.summary()[:400]},
+                            options=(HITL_APPROVE, ABORT),
+                        ),
+                    )
+                    if dec.continues:
+                        self._pins.repin(self._server_id, declared)
+                        self._ledger.append(
+                            mission_id,
+                            "tools.repinned",
+                            {"servidor": self._server_id, "operador": dec.operator},
+                        )
+                        repinned = True
+
+                if not repinned:
+                    self._ledger.append(
+                        mission_id,
+                        "mission.aborted",
+                        {"motivo": "tool poisoning", "detalle": scan.summary()},
+                    )
+                    self._ledger.append(mission_id, "mission.end", {"success": False})
+                    st = MissionState(objective=objective, steps=[], mission_id=mission_id)
+                    st.aborted_by = scan.summary()
+                    return st
 
             try:
                 plan: Plan = await self._planner.plan(objective, tools)
@@ -167,11 +212,53 @@ class MissionRunner:
                     },
                 )
 
-                if audit.verdict != APPROVE:
-                    # Un resultado no aprobado NO se sella como checkpoint ni se
-                    # reintenta: reintentar una inyeccion solo la repite.
+                if audit.verdict == ESCALATE:
+                    dec = await self._ask(
+                        mission_id,
+                        InterventionRequest(
+                            mission_id=mission_id,
+                            kind=SENTINEL_ESCALATION,
+                            summary=f"el Sentinel escalo el paso {idx} ({step.tool})",
+                            context={
+                                "objetivo": objective,
+                                "hallazgos": audit.summary()[:400],
+                                "resultado": salida[:600],
+                            },
+                            options=(HITL_APPROVE, OVERRIDE, RETRY, ABORT),
+                        ),
+                    )
+                    if dec.action == RETRY:
+                        continue
+                    if dec.continues:
+                        salida = dec.override_result if dec.action == OVERRIDE else salida
+                        step.result = salida
+                        step.status = "ok"
+                        self._ledger.append(
+                            mission_id,
+                            "step.checkpoint",
+                            {
+                                "step": idx,
+                                "result": step.result,
+                                "aprobado_por": dec.operator,
+                                "sustituido": dec.action == OVERRIDE,
+                            },
+                        )
+                        return
                     step.result = None
-                    step.status = "escalated" if audit.verdict == ESCALATE else "rejected"
+                    step.status = "escalated"
+                    self._ledger.append(
+                        mission_id,
+                        "mission.halted",
+                        {"step": idx, "motivo": "abortado por el operador",
+                         "detalle": dec.reason[:400]},
+                    )
+                    return
+
+                if audit.verdict != APPROVE:
+                    # REJECT es bloqueo duro: ningun operador lo puede levantar,
+                    # y no se reintenta (reintentar una inyeccion solo la repite).
+                    step.result = None
+                    step.status = "rejected"
                     self._ledger.append(
                         mission_id,
                         "mission.halted",
@@ -192,6 +279,27 @@ class MissionRunner:
                     {"step": idx, "attempt": step.attempts, "error": str(exc)[:400]},
                 )
         step.status = "failed"
+
+    async def _ask(self, mission_id: str, req: InterventionRequest) -> Decision:
+        """Pide intervencion humana y sella pregunta y respuesta en el ledger."""
+        self._ledger.append(
+            mission_id,
+            "hitl.requested",
+            {"kind": req.kind, "summary": req.summary, "opciones": list(req.options)},
+        )
+        dec = await self._approver.decide(req)
+        self._ledger.append(
+            mission_id,
+            "hitl.decision",
+            {
+                "kind": req.kind,
+                "accion": dec.action,
+                "operador": dec.operator,
+                "motivo": dec.reason[:300],
+                "timeout": dec.timed_out,
+            },
+        )
+        return dec
 
 
 def _text_of(result: Any) -> str:
