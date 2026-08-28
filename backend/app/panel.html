@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vertex Oracle Core — Consola de operador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#0E1118;      /* pizarra azulada, no negro */
+  --raised:#161B25;
+  --edge:#232B39;
+  --parchment:#E9E4D8;   /* texto calido sobre fondo frio: archivo, no terminal */
+  --muted:#8A93A6;
+  --seal:#5B8DEF;        /* azul de notaria: lo sellado */
+  --hold:#E0A340;        /* ambar: requiere una persona */
+  --break:#D4544A;       /* la cadena rota */
+  --ok:#5FB39A;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--ground); color:var(--parchment);
+  font:400 15px/1.55 "Space Grotesk",system-ui,sans-serif;
+  display:flex; flex-direction:column;
+}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.eyebrow{
+  font:500 11px/1 "IBM Plex Mono",monospace; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted);
+}
+button{font:inherit;cursor:pointer;border-radius:7px;border:1px solid var(--edge);
+  background:var(--raised);color:var(--parchment);padding:9px 16px;transition:.15s}
+button:hover:not(:disabled){border-color:var(--seal)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+input{font:inherit;background:var(--ground);color:var(--parchment);
+  border:1px solid var(--edge);border-radius:7px;padding:9px 13px;width:100%}
+input::placeholder{color:var(--muted)}
+
+header{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:16px 26px;border-bottom:1px solid var(--edge);background:var(--raised);
+}
+h1{font:700 17px/1 "Space Grotesk";margin:0;letter-spacing:-.01em}
+h1 span{color:var(--muted);font-weight:400}
+.link{display:flex;align-items:center;gap:8px;margin-left:auto}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--break)}
+.dot.on{background:var(--ok)}
+
+main{flex:1;display:grid;grid-template-columns:minmax(320px,1fr) minmax(0,1.35fr);
+  gap:1px;background:var(--edge);overflow:hidden}
+section{background:var(--ground);overflow-y:auto;padding:22px 26px}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+
+.launch{display:flex;gap:9px;margin:12px 0 8px}
+.launch button{white-space:nowrap}
+.hint{color:var(--muted);font-size:12.5px;margin:0 0 22px}
+
+.mission{border:1px solid var(--edge);border-radius:10px;padding:14px 16px;
+  margin-bottom:10px;cursor:pointer;transition:.15s;background:var(--raised)}
+.mission:hover{border-color:var(--seal)}
+.mission[aria-current="true"]{border-color:var(--seal);box-shadow:inset 3px 0 0 var(--seal)}
+.mission h3{margin:6px 0 0;font:500 14.5px/1.4 "Space Grotesk"}
+.row{display:flex;align-items:center;gap:9px;justify-content:space-between}
+.state{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;
+  text-transform:uppercase;padding:4px 8px;border-radius:4px;border:1px solid}
+.state.corriendo{color:var(--seal);border-color:var(--seal)}
+.state.exitosa{color:var(--ok);border-color:var(--ok)}
+.state.fallida,.state.abortada{color:var(--break);border-color:var(--break)}
+.state.espera{color:var(--hold);border-color:var(--hold)}
+
+/* --- La firma del panel: la cadena, dibujada como cadena --- */
+.chain{list-style:none;margin:14px 0 0;padding:0}
+.link-row{display:grid;grid-template-columns:26px 1fr;gap:14px;position:relative}
+.knot{display:flex;flex-direction:column;align-items:center}
+.knot i{width:9px;height:9px;border-radius:2px;transform:rotate(45deg);
+  background:var(--seal);margin-top:15px;flex:none}
+.knot s{flex:1;width:1px;background:var(--edge);margin:5px 0 0}
+.link-row:last-child .knot s{display:none}
+.link-row.break i{background:var(--break)}
+.link-row.break s{background:repeating-linear-gradient(180deg,var(--break) 0 3px,transparent 3px 7px)}
+.link-row.hold i{background:var(--hold)}
+.entry{padding:10px 0 4px;min-width:0}
+.entry b{font:500 13.5px/1.3 "Space Grotesk";display:block}
+.digest{font:400 11px/1.5 "IBM Plex Mono",monospace;color:var(--muted);
+  overflow-wrap:anywhere;margin-top:3px}
+.digest em{font-style:normal;color:var(--seal)}
+
+.empty{border:1px dashed var(--edge);border-radius:10px;padding:34px 24px;
+  text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--parchment);font-weight:500;margin-bottom:5px}
+
+/* --- El momento que detiene todo --- */
+.veil{position:fixed;inset:0;background:rgba(8,10,15,.82);display:grid;
+  place-items:center;padding:22px;z-index:9}
+.veil[hidden]{display:none}
+.ask{background:var(--raised);border:1px solid var(--hold);border-radius:13px;
+  max-width:620px;width:100%;padding:26px 28px;
+  box-shadow:0 22px 60px rgba(0,0,0,.5)}
+.ask h2{font:700 19px/1.3 "Space Grotesk";margin:9px 0 4px}
+.ask dl{margin:18px 0;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;
+  font-size:13.5px}
+.ask dt{color:var(--muted);font:500 11px/1.6 "IBM Plex Mono",monospace;
+  letter-spacing:.08em;text-transform:uppercase}
+.ask dd{margin:0;overflow-wrap:anywhere}
+.acts{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+.acts button[data-a="approve"]{border-color:var(--ok);color:var(--ok)}
+.acts button[data-a="abort"]{border-color:var(--break);color:var(--break)}
+@media(prefers-reduced-motion:no-preference){
+  .ask{animation:rise .22s ease-out}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Vertex Oracle Core <span>· consola de operador</span></h1>
+  <div class="link">
+    <span class="dot" id="dot"></span>
+    <span class="eyebrow" id="linkTxt">conectando</span>
+  </div>
+</header>
+
+<main>
+  <section>
+    <p class="eyebrow">Nueva misión</p>
+    <div class="launch">
+      <input id="obj" placeholder="Audita el host 10.0.0.5" autocomplete="off">
+      <button id="demo">Demo</button>
+      <button id="real">Ejecutar</button>
+    </div>
+    <p class="hint">Demo usa un plan fijo y no consume API. Ejecutar planifica con
+      el modelo y audita cada resultado.</p>
+
+    <p class="eyebrow">Misiones</p>
+    <div id="list"></div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Cadena de custodia</p>
+    <div id="detail"></div>
+  </section>
+</main>
+
+<div class="veil" id="veil" hidden>
+  <div class="ask" role="dialog" aria-modal="true" aria-labelledby="askH">
+    <p class="eyebrow" id="askKind">intervención</p>
+    <h2 id="askH"></h2>
+    <dl id="askCtx"></dl>
+    <input id="why" placeholder="Motivo — queda sellado en el ledger" autocomplete="off">
+    <div class="acts" id="acts"></div>
+  </div>
+</div>
+
+<script src="/static/panel.js"></script>
+</body>
+</html>

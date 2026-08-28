@@ -36,8 +36,11 @@ def compute_hash(prev_hash: str, ts: float, mission_id: str, kind: str, payload:
 
 
 class Ledger:
-    def __init__(self, path: str | Path = "oracle_ledger.db") -> None:
+    def __init__(self, path: str | Path = "oracle_ledger.db", on_append=None) -> None:
+        """`on_append` recibe cada Entry recien sellada. Sirve para transmitir
+        la mision en vivo sin que el ledger sepa nada de WebSockets."""
         self.path = str(path)
+        self._on_append = on_append
         self._con = sqlite3.connect(self.path)
         self._con.execute("PRAGMA journal_mode=WAL")
         self._con.execute(
@@ -66,7 +69,14 @@ class Ledger:
             (ts, mission_id, kind, _canonical(payload), prev, h),
         )
         self._con.commit()
-        return Entry(cur.lastrowid, ts, mission_id, kind, payload, prev, h)
+        entry = Entry(cur.lastrowid, ts, mission_id, kind, payload, prev, h)
+        if self._on_append is not None:
+            try:
+                self._on_append(entry)
+            except Exception:  # noqa: BLE001
+                # Un observador roto NUNCA puede tumbar el sellado del ledger.
+                pass
+        return entry
 
     def verify(self) -> tuple[bool, int | None]:
         """Recorre la cadena. Devuelve (ok, seq_de_la_primera_fila_rota)."""
