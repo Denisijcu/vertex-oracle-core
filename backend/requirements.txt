@@ -3,3 +3,4 @@ anyio>=4.9
 pydantic>=2.9
 anthropic>=1.0.0
 jsonschema>=4.23
+dilithium-py>=1.4.0

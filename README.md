@@ -18,10 +18,13 @@ tres problemas concretos:
 | 0 | Esqueleto: MCP stdio, descubrimiento de tools, reintentos, ledger SHA-256 | ✅ verificada |
 | 1 | Planner LLM, plan como contrato validado, plan bloqueado | ✅ verificada |
 | 2a | Tool poisoning: pinning SHA-256 + escaneo de descripciones | ✅ verificada |
-| 2b | Sandbox de ejecución (gVisor/microVM) | ⬜ **siguiente** |
-| 3 | Sentinel Auditor (modelo distinto) + AgentDojo | ⬜ |
-| 4 | HITL: Redis Pub/Sub + WebSockets + Angular 22 | ⬜ |
-| 5 | JWT/RTR, PostgreSQL 17, anclaje ML-DSA-65 del ledger | ⬜ |
+| 2b | Sandbox gVisor: módulo + infraestructura WSL2 | ✅ verificada |
+| 3 | Sentinel Auditor: auditoría de salidas, dos capas | ✅ verificada |
+| 4 | HITL: política de fallo cerrado, re-fijado con aprobación humana | ✅ verificada |
+| 5a | Anclaje ML-DSA-65 del ledger (FIPS 204, post-cuántico) | ✅ verificada |
+| 5b | JWT/RTR + PostgreSQL 17 | ⬜ depende del transporte |
+| — | Transporte HITL: Redis Pub/Sub + WebSocket + Angular 22 | ⬜ |
+| — | Cableado del sandbox al camino de ejecución | ⬜ **pendiente clave** |
 
 ### Suites verdes
 
@@ -30,6 +33,11 @@ tres problemas concretos:
 | `test_planner.py` | 7/7 | gratis |
 | `test_manifest.py` | 13/13 | gratis |
 | `test_poisoning_live.py` | 4/4 | gratis |
+| `test_sandbox.py` | 20/20 | gratis (4 requieren gVisor) |
+| `test_sentinel.py` | 23/23 | gratis |
+| `test_sentinel_live.py` | 3/3 | gratis |
+| `test_hitl.py` | 12/12 | gratis |
+| `test_anchor.py` | 13/13 | gratis |
 | `spike.py` | smoke OK | gratis |
 | `mission.py` | misión real OK | ~centavos de API |
 
@@ -104,3 +112,15 @@ pinning criptográfico más aprobación humana de tools nuevas (Fase 4).
 
 **Un servidor que llega envenenado nunca se fija.** Fijarlo legitimaría el
 ataque en el primer contacto.
+
+**El HITL falla cerrado.** Sin operador, o sin respuesta a tiempo, la misión
+se aborta. Nunca se auto-aprueba. Y lo indefendible —inyección declarada, o un
+veredicto `reject` del Sentinel— no llega al operador: si todo fuera aprobable,
+el humano se convierte en el eslabón que el atacante ataca.
+
+**El hash chain prueba consistencia, no autoría.** Un atacante con acceso al
+`.db` puede borrar filas y recalcular toda la cadena; el resultado es
+internamente consistente y falso. Por eso las cabezas se firman con ML-DSA-65:
+sin la clave privada no se puede anclar una cadena reescrita. La clave pública
+se distribuye, y con ella un tercero verifica el ledger sin confiar en
+nosotros.
