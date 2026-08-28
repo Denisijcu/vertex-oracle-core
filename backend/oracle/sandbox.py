@@ -170,6 +170,38 @@ class DockerSandbox:
         }
         return rep
 
+    # -------------------------------------------------- servidores MCP
+
+    def mcp_stdio_params(
+        self,
+        module: str,
+        code_dir: str,
+        image: str = "oracle-tools:latest",
+    ):
+        """Devuelve StdioServerParameters que lanzan un servidor MCP AISLADO.
+
+        La idea clave: MCP sobre stdio es JSON por stdin/stdout, y `docker run -i`
+        entrega exactamente esas dos tuberias. Asi que el contenedor ES el
+        subproceso que el cliente MCP esperaba. El runner no cambia ni una linea:
+        recibe el mismo tipo de objeto que antes.
+
+        `code_dir` se monta de SOLO LECTURA: el contenedor ejecuta el codigo
+        pero no puede modificarlo.
+
+        OJO: esto NO hace preflight solo. Llama a preflight() antes, o el
+        contenedor podria arrancar con runc si alguien cambio la politica.
+        """
+        from mcp import StdioServerParameters
+
+        args = [
+            *self.policy.docker_args(),
+            "--volume", f"{code_dir}:/app:ro",
+            "--workdir", "/app",
+            image,
+            "python", "-m", module,
+        ]
+        return StdioServerParameters(command=self._docker, args=args)
+
     # ------------------------------------------------------------------ run
 
     async def run(

@@ -1,0 +1,17 @@
+# Imagen para ejecutar servidores MCP dentro del sandbox gVisor.
+#
+# El codigo de las tools NO se hornea aqui: se monta de solo lectura en /app
+# al arrancar el contenedor. Asi la imagen no cambia cada vez que editas una
+# tool, y el contenedor no puede modificar el codigo que ejecuta.
+FROM python:3.12-slim
+
+# Sin bytecode: el filesystem va en solo lectura y no queremos ruido.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+RUN pip install --no-cache-dir "mcp==2.1.1" "anyio>=4.9" "pydantic>=2.9"
+
+WORKDIR /app
+
+# Sin CMD a proposito: el modulo a ejecutar lo decide el orquestador.
