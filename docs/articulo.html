@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le pedí a una IA que me pusiera al día. Terminé construyendo un orquestador de agentes en cuatro madrugadas</title>
+<meta name="description" content="Registro honesto de construir Vertex Oracle Core: las apuestas técnicas, los errores tontos, y el hallazgo de que un hash chain prueba menos de lo que uno cree.">
+<style>
+/* Si tu blog ya tiene tipografía propia, borra este bloque <style> entero
+   y pega solo el contenido de <article>. El HTML es semántico y se adapta. */
+:root{--tinta:#1a1d24;--suave:#5d6472;--linea:#e2e0da;--papel:#faf9f6;--acento:#3f6ea8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--papel);color:var(--tinta);
+  font:400 18px/1.7 Georgia,"Iowan Old Style",serif}
+article{max-width:44rem;margin:0 auto;padding:4rem 1.4rem 6rem}
+h1{font-size:2.1rem;line-height:1.22;letter-spacing:-.02em;margin:0 0 .6rem;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:700}
+.bajada{font-size:1.18rem;color:var(--suave);margin:0 0 2.6rem;font-style:italic}
+h2{font-size:1.42rem;line-height:1.3;margin:3.2rem 0 1rem;letter-spacing:-.01em;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:700}
+h3{font-size:1.1rem;margin:2rem 0 .6rem;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:600}
+p{margin:0 0 1.25rem}
+blockquote{margin:1.8rem 0;padding:.2rem 0 .2rem 1.4rem;
+  border-left:3px solid var(--acento);font-size:1.15rem;color:var(--tinta)}
+blockquote p{margin:0}
+pre{background:#14171d;color:#e8e4da;border-radius:8px;padding:1.1rem 1.3rem;
+  overflow-x:auto;font:400 14.5px/1.65 ui-monospace,"SFMono-Regular",Consolas,monospace;
+  margin:1.6rem 0}
+code{font:400 .92em/1.5 ui-monospace,"SFMono-Regular",Consolas,monospace;
+  background:#eeece6;padding:.13em .38em;border-radius:4px}
+pre code{background:none;padding:0;font-size:inherit;color:inherit}
+table{border-collapse:collapse;width:100%;margin:1.8rem 0;font-size:.95rem;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--linea);
+  vertical-align:top}
+th{font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--suave)}
+hr{border:0;border-top:1px solid var(--linea);margin:3rem 0}
+ul,ol{margin:0 0 1.25rem;padding-left:1.3rem}
+li{margin-bottom:.5rem}
+a{color:var(--acento)}
+.firma{margin-top:3rem;font-size:.95rem;color:var(--suave);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+figure{margin:2rem 0}
+figcaption{font-size:.86rem;color:var(--suave);margin-top:.6rem;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+</style>
+</head>
+<body>
+<article>
+
+<h1>Le pedí a una IA que me pusiera al día. Terminé construyendo un orquestador de agentes en cuatro madrugadas</h1>
+
+<p class="bajada">Y lo más útil que aprendí fue de las cosas que salieron mal.</p>
+
+<hr>
+
+<p>Trabajo de noche en Amazon. Programo en las horas sueltas, casi siempre entre la una y las seis de la mañana, antes de dormir de doce del día a seis de la tarde. Vertex Coders LLC soy yo y una laptop.</p>
+
+<p>Hace unos días quise ponerme al día con lo que está saliendo en IA aplicada. Le pedí a un modelo que me mostrara opciones y me devolvió, entre otras, la arquitectura de una plataforma de orquestación para <strong>agentes de autonomía prolongada</strong> bajo confianza cero. Seis pilares, stack completo, diagrama de flujo. Se veía bien.</p>
+
+<p>Lo primero que hice fue ir a verificar cada afirmación de ese documento.</p>
+
+<p>Estaba desactualizado en tres puntos, y ninguno era culpa del modelo: eran cosas que habían cambiado en los noventa días anteriores. Ese fue el verdadero comienzo del proyecto.</p>
+
+<p>Este es el registro de lo que pasó después. No es un tour por una arquitectura terminada. Es la lista de lo que aposté, lo que perdí, y los errores tontos que me costaron tiempo.</p>
+
+<h2>La pregunta que organizó todo</h2>
+
+<p>Antes de escribir una línea me hice una pregunta que terminó ordenando el proyecto entero:</p>
+
+<blockquote><p>¿De cuántas formas distintas puede este sistema mentirme?</p></blockquote>
+
+<p>Salieron seis, y cada una se convirtió en una fase:</p>
+
+<table>
+<thead><tr><th></th><th>Pregunta</th><th>Qué la cierra</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>¿Esto corre?</td><td>Viabilidad de la maquinaria</td></tr>
+<tr><td>1</td><td>¿Qué decide el agente?</td><td>El plan como contrato validado</td></tr>
+<tr><td>2a</td><td>¿Qué dicen ser las herramientas?</td><td>Fijado criptográfico</td></tr>
+<tr><td>2b</td><td>¿Qué hacen?</td><td>Contención en sandbox</td></tr>
+<tr><td>3</td><td>¿Qué devuelven?</td><td>Auditoría de salidas</td></tr>
+<tr><td>4</td><td>¿Y si algo falla?</td><td>Intervención humana</td></tr>
+<tr><td>5</td><td>¿Cómo se lo pruebas a un tercero?</td><td>Firma post-cuántica</td></tr>
+</tbody>
+</table>
+
+<p>El orden no es capricho, y hay una dependencia que vale la pena explicar porque es la que más me costó ver.</p>
+
+<p><strong>Auditar la salida de una herramienta antes de tener contención llega tarde.</strong> La herramienta ya corrió. Ya escribió. Ya llamó a donde iba a llamar. Un veredicto de "esto era malicioso" después de eso es forense, no defensa. Con contención primero, la herramienta corre dentro de una caja de la que no puede salir y <em>entonces</em> el auditor decide si el resultado se acepta. El mismo componente pasa de forense a portero según dónde lo pongas.</p>
+
+<p>Y una distinción que la gente confunde: <em>qué dice ser</em> una herramienta y <em>qué hace</em> son dos preguntas separadas. Una herramienta con huella impecable puede borrarte el disco. Cerrar una sin la otra no sirve de nada.</p>
+
+<h2>Apuesta 1: perdida el primer día</h2>
+
+<p>La especificación 2026-07-28 del Model Context Protocol trae una extensión llamada <strong>Tasks</strong> —<code>tasks/get</code>, <code>tasks/update</code>, <code>tasks/cancel</code>— que es exactamente el ciclo de vida de una misión de múltiples pasos. Mi plan inicial era montarme encima y ahorrarme semanas.</p>
+
+<p>Instalé el SDK de Python para confirmarlo antes de diseñar nada.</p>
+
+<p>No está. Ni en <code>mcp==2.0.0</code> ni en <code>2.1.1</code>, que era la última estable. La especificación está finalizada y los SDKs Tier 1 hablan 2026-07-28 — eso es cierto. Pero <strong>Tasks es una extensión con repositorio aparte</strong>, y el repositorio tiene el esquema, no la implementación en Python. Las notas de la versión lo dicen sin rodeos: el SDK pasa la suite de conformidad oficial <em>excepto</em> la de tasks.</p>
+
+<p>"Spec final" no es lo mismo que "el SDK lo trae". Confundir esas dos cosas me habría costado semanas.</p>
+
+<p><strong>La decisión:</strong> el estado de la misión vive en el orquestador, no en la capa MCP. Y queda aislado en un solo módulo, para que el día que salga la extensión sea ese archivo el único que cambie.</p>
+
+<p>Descubrir esto el primer día costó una hora. Descubrirlo en la fase 3 habría costado el proyecto. Por eso la fase 0 existe.</p>
+
+<h2>Apuesta 2: ganada, y me sorprendió</h2>
+
+<p>El consenso de 2026 sobre ejecutar código generado por un LLM es claro: Docker no basta. Los contenedores comparten el kernel del anfitrión, y un escape de contenedor no te da acceso a un contenedor, te da acceso a tu máquina. La recomendación es gVisor o una microVM.</p>
+
+<p>Yo desarrollo en Windows. Y Docker Desktop <strong>no soporta instalar un runtime OCI alternativo</strong>. Hay una petición abierta desde mayo de 2026; sigue abierta.</p>
+
+<p>Di por hecho que terminaríamos montando una máquina virtual Hyper-V dedicada.</p>
+
+<p>No hizo falta. El camino que funcionó:</p>
+
+<ol>
+<li>Una distro WSL2 <strong>nueva y dedicada</strong> — no la de pentesting que ya tenía</li>
+<li>Blindarla en <code>wsl.conf</code>: <code>automount</code> e <code>interop</code> apagados</li>
+<li>Sacarla de la integración de Docker Desktop</li>
+<li>Docker Engine <strong>nativo</strong> dentro de la distro</li>
+<li>gVisor con la plataforma systrap, que no necesita KVM</li>
+</ol>
+
+<p>El paso 2 es el que de verdad importa y el que más se salta la gente. Sin él, el contenedor "aislado" tiene tus discos de Windows montados en <code>/mnt/c</code> y <code>/mnt/f</code>. Un escape te encuentra el proyecto entero, y las llaves.</p>
+
+<p>Verificación:</p>
+
+<pre><code>$ uname -r
+6.6.87.2-microsoft-standard-WSL2      &lt;- el host
+
+$ docker run --runtime=runsc --rm ubuntu uname -r
+4.19.0-gvisor                          &lt;- dentro del sandbox
+
+$ docker run --rm ubuntu uname -r
+6.6.87.2-microsoft-standard-WSL2      &lt;- sin runsc: mismo kernel que el host</code></pre>
+
+<p>Esa diferencia del medio es todo el asunto. El proceso aislado no habla con mi kernel; habla con un kernel en espacio de usuario.</p>
+
+<p><strong>Una decisión de diseño que salió de aquí:</strong> el runtime aislado es obligatorio, nunca opcional. Si <code>runsc</code> no está registrado, el módulo lanza una excepción y la ejecución se detiene. Nunca cae a <code>runc</code> en silencio. Esa degradación silenciosa es el modo de fallo más peligroso del sistema entero: no explota, no da error, y todo parece funcionar mientras el código corre sin aislamiento.</p>
+
+<h2>El truco que resolvió el problema que parecía más difícil</h2>
+
+<p>Durante tres sesiones tuve el sandbox construido y verificado, pero <strong>sin cablear al camino de ejecución</strong>. Existía, se autoverificaba, y las herramientas seguían corriendo como subproceso del orquestador, sin aislamiento ninguno.</p>
+
+<p>El problema parecía exigir reescribir el transporte MCP. Un servidor MCP por <code>stdio</code> arranca como subproceso; meterlo en un contenedor sonaba a rediseño.</p>
+
+<p>La solución cabe en una línea. <strong>MCP sobre stdio es JSON por stdin/stdout, y <code>docker run -i</code> entrega exactamente esas dos tuberías.</strong> Así que el contenedor <em>es</em> el subproceso que el cliente MCP esperaba encontrar:</p>
+
+<pre><code>StdioServerParameters(
+    command="docker",
+    args=["run", "--rm", "-i", "--runtime=runsc",
+          "--network=none", "--cap-drop", "ALL", "--read-only",
+          "--user=65534:65534", "--pids-limit=128",
+          "--volume", f"{code_dir}:/app:ro",
+          image, "python", "-m", module],
+)</code></pre>
+
+<p>El runner no cambió ni una línea. Recibe el mismo tipo de objeto que antes y no sabe —ni necesita saber— que del otro lado hay un kernel en espacio de usuario.</p>
+
+<p>Y la verificación no confía en la configuración: escribí un servidor MCP cuyas herramientas reportan su propio entorno. Si la herramienta que te dice qué kernel ve responde <code>4.19.0-gvisor</code>, el aislamiento es real, y lo dice el proceso, no una bandera.</p>
+
+<p>El código va montado <strong>de solo lectura</strong>: el contenedor ejecuta tus herramientas pero no puede modificarlas.</p>
+
+<h2>El hallazgo que me cambió el diseño</h2>
+
+<p>Durante cinco fases di por bueno que mi registro forense probaba integridad. Era una cadena de hashes SHA-256: cada entrada encadena con la anterior, editar cualquier fila invalida todo lo que viene después.</p>
+
+<p>Al llegar a la pregunta "¿cómo se lo pruebas a un tercero?", me senté a atacarlo en serio.</p>
+
+<blockquote><p>Una cadena de hashes prueba consistencia. No prueba autoría ni momento.</p></blockquote>
+
+<p>Un atacante con acceso a la base de datos no edita una fila y ya. Borra la fila que lo delata, <strong>recalcula todos los hashes desde ahí</strong>, y te queda una cadena internamente perfecta y completamente falsa.</p>
+
+<p>Lo escribí como prueba. La verificación de la cadena devuelve <code>True</code>. La cadena sola no basta.</p>
+
+<p>La solución es firmar periódicamente la cabeza de la cadena con una clave privada que no vive junto a la base de datos. Un atacante que reescriba la cadena no puede firmar la cabeza nueva —le falta la clave— ni reutilizar la firma vieja, porque la entrada que firmaba ya no existe.</p>
+
+<p>Elegí <strong>ML-DSA-65</strong> (FIPS 204), el estándar NIST post-cuántico. El razonamiento: un registro forense tiene que seguir siendo verificable dentro de diez o quince años, y una firma clásica emitida hoy es repudiable el día que exista una computadora cuántica relevante. Clave pública de 1.952 bytes, privada de 4.032, firma de 3.309, cuarenta y ocho milisegundos por firma. Nada que duela en este contexto.</p>
+
+<p>El mismo ataque, ahora:</p>
+
+<pre><code>cadena interna    : integra
+anclas huerfanas  : [4]  &lt;- la entrada firmada desaparecio
+
+NO VERIFICADO</code></pre>
+
+<p>Íntegra y no verificada al mismo tiempo. Esa es la distinción completa.</p>
+
+<p>Y el punto que lo vuelve útil de verdad: <strong>la clave pública se distribuye</strong>. Se la das a un cliente y verifica tu registro sin tener que confiar en ti.</p>
+
+<h2>Ponerle cara: la cadena, dibujada como cadena</h2>
+
+<p>Lo último que construí fue la consola de operador. Y ahí tomé una decisión estética que también es una decisión de producto: <strong>evité la terminal verde sobre negro</strong>.</p>
+
+<p>El mundo de este producto no es el hacking de película. Es la cadena de custodia: actas, sellos, evidencia que un tercero verifica. Así que el fondo es pizarra azulada y el texto tiene calidez de pergamino — archivo, no consola.</p>
+
+<p>El elemento que define el panel es el registro dibujado como lo que es: cada entrada es un eslabón unido al anterior por una línea continua. Cuando algo se rompe —un veredicto de rechazo, una misión abortada— el eslabón se pone rojo y <strong>la línea pasa a discontinua</strong>. La estructura visual dice lo mismo que el hash.</p>
+
+<p>Leída de arriba abajo, una misión cuenta su propia historia:</p>
+
+<pre><code>Plan bloqueado            #10
+Paso iniciado — recon     #11
+Veredicto del Sentinel    #12  approve
+Punto de control sellado  #13</code></pre>
+
+<p>Ese es el orden de las puertas: el plan se bloquea, el paso corre, el auditor dicta veredicto <em>antes</em> de sellar, y solo entonces se sella.</p>
+
+<p>Sobre el transporte tomé una decisión de alcance que digo abierta: <strong>no usé Redis</strong>. Para una sola instancia del orquestador, Redis solo agrega una dependencia que administrar para mover mensajes entre corrutinas del mismo proceso. La costura quedó puesta: el día que haga falta escalar a varios workers, cambia un archivo.</p>
+
+<h2>Los errores tontos, que son los que más tiempo cuestan</h2>
+
+<p>Los pongo porque son los que nadie escribe y todos cometemos.</p>
+
+<h3>Un archivo llamado <code>,env</code></h3>
+<p>Coma en vez de punto. Mi <code>.gitignore</code> ignoraba <code>.env</code>; a <code>,env</code> no lo ignoraba nadie. Iba camino al primer commit de un repositorio público con la llave de API adentro. Lo atrapé revisando el árbol de archivos antes de commitear, no por suerte. Ahora el <code>.gitignore</code> cubre las variantes con typo a propósito.</p>
+
+<h3>Un <code>git push</code> de tres objetos</h3>
+<p>Pusheé antes de commitear. Tres objetos en git es un commit, un árbol y un blob: <strong>un solo archivo</strong>. Mis veintidós archivos seguían en el área de preparación. El número te lo dice si sabes leerlo.</p>
+
+<h3>Mis aprobaciones locales se subieron al repositorio público</h3>
+<p>El archivo con las huellas de servidores MCP aprobados entró en un commit porque <code>*.json</code> no estaba ignorado. No es una fuga de secretos, pero rompe justo la propiedad que el fijado existe para dar: cualquiera que clonara heredaba mis aprobaciones y su sistema arrancaba confiando en servidores que aprobé yo.</p>
+
+<h3>Un <code>ImportError</code> con cara de bug del código</h3>
+<p>Escribí <code>python test.py</code> en vez de <code>.venv\Scripts\python test.py</code> y me llevé un <code>cannot import name 'Client'</code> que parecía un problema de mi programa. Era el Python global, con una versión vieja de la librería instalada. La pista estaba en la ruta del traceback: decía <code>C:\Python314\</code> y no <code>.venv</code>. Lee la ruta antes de leer el error.</p>
+
+<h3>Un parche que no aplicó y no se quejó</h3>
+<p>Un script de edición no encontró el texto que buscaba y siguió como si nada. Lo detecté depurando cuando dos pruebas fallaron. Ahora todo parche lleva una aserción que verifica que encontró su sitio.</p>
+
+<h2>La lección que apareció dos veces</h2>
+
+<p>De todo lo anterior, esta es la que me llevo.</p>
+
+<blockquote><p>Una prueba que pasa por la razón equivocada es peor que una que falla.</p></blockquote>
+
+<p><strong>Primera vez.</strong> El SDK v2 pasó a snake_case: <code>is_error</code>, no <code>isError</code>. Mi chequeo de errores nunca disparaba, así que los reintentos jamás corrían y el paso que debía fallar aparecía en verde. Si me hubiera limitado a revisar el código sin ejecutarlo, habría entregado algo roto y silencioso.</p>
+
+<p><strong>Segunda vez.</strong> Al separar el JavaScript del panel a su propio archivo, una prueba que buscaba cierta cadena <em>dentro del HTML</em> empezó a fallar. El código estaba bien; la prueba se quedó mirando el sitio viejo. Esa vez falló ruidosamente y fue fácil. Pero el caso inverso —que la cadena siguiera ahí por casualidad— habría dado verde mientras el script ni cargaba.</p>
+
+<p>Las dos aparecieron <strong>después de refactorizar</strong>. Un patrón que sale dos veces en cuatro sesiones ya no es anécdota. Cuando muevas algo de sitio, pregúntate qué pruebas estaban mirando el sitio viejo.</p>
+
+<h2>Decisiones que quedaron escritas en el código</h2>
+
+<p>Estas las documenté dentro de los propios módulos, para que dentro de seis meses nadie las relaje "temporalmente".</p>
+
+<p><strong>El plan es un contrato, no texto.</strong> La salida del planificador se valida contra el esquema JSON real de cada herramienta. Un plan que use una herramienta inexistente o argumentos mal tipados se rechaza y se le devuelve el error concreto al modelo. Nada se ejecuta "como se pudo entender".</p>
+
+<p><strong>Plan-before-act.</strong> Una vez bloqueado, el ejecutor no renegocia el plan: no puede agregar pasos ni cambiar la herramienta de un paso. Ahí se corta la deriva semántica. Lo comprobé de la peor manera: mi propio modo demo declaraba un objetivo de relleno distinto al real, y el sistema abortó la misión. La defensa funcionó contra el código de quien la escribió.</p>
+
+<p><strong>El escaneo heurístico es un cable trampa, no una garantía.</strong> Busco patrones de inyección en descripciones y resultados. Son expresiones regulares: quien conozca los patrones los evade. Lo escribí en el docstring del módulo para no confiar en ello más de lo que aguanta. La defensa fuerte es el fijado criptográfico más aprobación humana.</p>
+
+<p><strong>El auditor debe usar un modelo distinto al ejecutor.</strong> La autoevaluación de un solo modelo no es un detector fiable: comparte sesgos y puntos ciegos con lo que audita. Dos tamaños de la misma familia es la versión débil de esta regla; lo fuerte es otro proveedor.</p>
+
+<p><strong>El control humano falla cerrado.</strong> Sin operador conectado, o sin respuesta a tiempo, la misión se aborta. Nunca se auto-aprueba. Un panel cerrado no es una aprobación. Y lo indefendible no llega al operador: si todo fuera aprobable, el humano se convierte en el eslabón que el atacante ataca. Basta con cansarlo a las tres de la mañana con veinte alertas para que apruebe la mala.</p>
+
+<p><strong>Un resultado rechazado no se reintenta.</strong> Reintentar una inyección solo la repite.</p>
+
+<h2>Lo que esto NO es</h2>
+
+<p>Aquí es donde muchos artículos técnicos mienten por omisión, así que lo digo claro.</p>
+
+<p><strong>Esto es una prueba de concepto.</strong> No tiene usuarios. No está en producción. No lo ha auditado nadie más que yo. Le falta autenticación —el servidor escucha solo en localhost a propósito— y persistencia seria.</p>
+
+<p><strong>No lo he medido contra un banco de pruebas adversario.</strong> La lógica está verificada con casos que escribí yo, y quien escribe las pruebas y el código comparte los puntos ciegos de ambos. Correrlo contra AgentDojo es lo que convertiría mi confianza en un número.</p>
+
+<p><strong>El auditor con modelo real corrió poco.</strong> Casi toda la lógica está verificada con sustitutos deterministas. El juicio del modelo, apenas.</p>
+
+<p>Lo que sí puedo afirmar: <strong>124 casos de prueba en once suites</strong>, diez de las cuales corren sin gastar un centavo en API, y todos verificables clonando el repositorio.</p>
+
+<h2>Qué me llevo, más allá del proyecto</h2>
+
+<p>Empecé queriendo ponerme al día. Eso lo conseguí, y de una forma que leer no me habría dado.</p>
+
+<p>Pero lo más transferible no es el código. Es que <strong>ese esquema de seis preguntas no pertenece a este proyecto</strong>. Aplica a cualquier sistema donde una IA actúe sola con herramientas.</p>
+
+<p>Si tienes un asistente con permiso de escritura en tu base de datos, o un agente que lee correos y actúa según lo que encuentra, o cualquier cosa que consuma servidores MCP de terceros, las mismas preguntas te sirven hoy:</p>
+
+<ul>
+<li>¿Qué decide, y quién valida esa decisión antes de ejecutarla?</li>
+<li>¿Qué dicen ser tus herramientas, y cómo sabes que no cambiaron?</li>
+<li>¿Qué hacen, y qué pasa si una se porta mal?</li>
+<li>¿Qué devuelven, y qué pasa si un resultado trae instrucciones dentro?</li>
+<li>¿Quién interviene cuando algo no cuadra, y qué pasa si no hay nadie?</li>
+<li>¿Cómo le pruebas a alguien que no confía en ti que las cosas pasaron como dices?</li>
+</ul>
+
+<p>La mayoría de los sistemas que veo hoy no tienen respuesta para más de dos o tres.</p>
+
+<p>Y una nota sobre el método, porque va con lo que escribo en otro lado: <strong>construí esto trabajando con IA como colega, no como oráculo</strong>. La arquitectura inicial vino de un modelo y estaba desactualizada. La verificación de cada afirmación fue trabajo. Las dos apuestas técnicas las planteé antes de saber el resultado, y una la perdí. El valor no estuvo en pedirle a una IA que construyera algo; estuvo en no creerle nada sin ejecutarlo.</p>
+
+<hr>
+
+<p><strong>Código:</strong> <a href="https://github.com/Denisijcu/vertex-oracle-core">github.com/Denisijcu/vertex-oracle-core</a></p>
+
+<p class="firma">Denis Sánchez Leyva — Vertex Coders LLC, Miami</p>
+
+</article>
+</body>
+</html>
